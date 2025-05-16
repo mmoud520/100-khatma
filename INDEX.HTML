@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="ar">
+<head>
+  <meta charset="UTF-8">
+  <title>متابعة ختم القرآن - 100 ختمة / 5 سنوات</title>
+  <style>
+    body {
+      font-family: 'Cairo', sans-serif;
+      direction: rtl;
+      background: #f5f7fa;
+      color: #2c3e50;
+      text-align: center;
+      padding: 30px;
+    }
+
+    h1 { color: #1abc9c; }
+    .progress-circle {
+      width: 150px;
+      height: 150px;
+      margin: auto;
+      background: conic-gradient(#1abc9c calc(var(--percent) * 1%), #ecf0f1 0%);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 24px;
+      font-weight: bold;
+      margin-bottom: 20px;
+    }
+
+    .stats { margin: 20px auto; font-size: 18px; max-width: 500px; }
+    button {
+      padding: 10px 20px; margin: 5px; font-size: 16px;
+      border: none; border-radius: 5px; cursor: pointer;
+    }
+
+    .btn-main { background-color: #1abc9c; color: white; }
+    .btn-sub { background-color: #3498db; color: white; }
+    .btn-reset { background-color: #e74c3c; color: white; }
+
+    .night-mode {
+      background: #2c3e50;
+      color: #ecf0f1;
+    }
+
+    .night-mode .progress-circle {
+      background: conic-gradient(#f39c12 calc(var(--percent) * 1%), #34495e 0%);
+    }
+
+    .night-mode .btn-main { background-color: #f39c12; }
+    .night-mode .btn-sub { background-color: #9b59b6; }
+    .night-mode .btn-reset { background-color: #c0392b; }
+
+    .chart-bar {
+      height: 20px;
+      background-color: #1abc9c;
+      border-radius: 10px;
+      transition: width 0.5s;
+      margin-top: 10px;
+    }
+
+    .bar-chart {
+      display: grid;
+      grid-template-columns: repeat(12, 1fr);
+      gap: 5px;
+      margin: 30px auto;
+      max-width: 100%;
+    }
+
+    .bar {
+      background: #2ecc71;
+      width: 100%;
+      transition: height 0.4s;
+      display: flex;
+      align-items: flex-end;
+      justify-content: center;
+      font-size: 12px;
+      color: white;
+      border-radius: 5px 5px 0 0;
+    }
+
+    .bar-label {
+      text-align: center;
+      font-size: 12px;
+      margin-top: 5px;
+    }
+
+    audio { display: none; }
+  </style>
+</head>
+<body>
+
+  <h1>متابعة ختم القرآن (100 ختمة خلال 5 سنوات)</h1>
+
+  <div class="progress-circle" id="progressCircle" style="--percent: 0;">
+    <span id="progressText">0%</span>
+  </div>
+
+  <div class="stats">
+    <p>عدد الصفحات المقروءة: <span id="pagesRead">0</span> / 60400</p>
+    <p>عدد الختمات: <span id="khatmaCount">0</span> / 100</p>
+    <p>الختمات المتبقية: <span id="remaining">100</span></p>
+    <p>المعدل اليومي: <span id="dailyRate">0</span> صفحة</p>
+  </div>
+
+  <button class="btn-main" onclick="addPages(604)">+ ختمة كاملة</button>
+  <button class="btn-sub" onclick="addPages(20)">+ جزء (20 صفحة)</button>
+  <button class="btn-sub" onclick="addPages(1)">+ صفحة واحدة</button>
+  <button class="btn-sub" onclick="saveData()">💾 حفظ</button>
+  <button class="btn-reset" onclick="reset()">🗑️ إعادة ضبط</button>
+  <button onclick="toggleNight()" class="btn-sub">🌙 الوضع الليلي</button>
+
+  <div class="stats">
+    <h3>📊 عدد الختمات شهريًا (هجري)</h3>
+    <div class="bar-chart" id="barChart"></div>
+  </div>
+
+  <audio id="dingSound" src="https://actions.google.com/sounds/v1/alarms/beep_short.ogg"></audio>
+
+  <script>
+    const TOTAL_KHATMAT = 100;
+    const TOTAL_PAGES = 604;
+    const TOTAL_PAGES_GOAL = TOTAL_KHATMAT * TOTAL_PAGES;
+
+    let pagesRead = parseInt(localStorage.getItem("pages") || "0");
+    let khatmaDates = JSON.parse(localStorage.getItem("khatmaDates") || "[]");
+
+    const monthsHijri = ["محرم", "صفر", "ربيع ١", "ربيع ٢", "جمادى ١", "جمادى ٢",
+                         "رجب", "شعبان", "رمضان", "شوال", "ذو القعدة", "ذو الحجة"];
+
+    function updateUI() {
+      const khatmaCount = Math.floor(pagesRead / TOTAL_PAGES);
+      const percent = Math.min((pagesRead / TOTAL_PAGES_GOAL) * 100, 100).toFixed(1);
+      const remaining = Math.max(TOTAL_KHATMAT - khatmaCount, 0);
+
+      document.getElementById("pagesRead").innerText = pagesRead;
+      document.getElementById("khatmaCount").innerText = khatmaCount;
+      document.getElementById("remaining").innerText = remaining;
+      document.getElementById("progressText").innerText = percent + "%";
+      document.getElementById("progressCircle").style.setProperty("--percent", percent);
+      document.getElementById("dailyRate").innerText = Math.round(pagesRead / daysSinceStart());
+
+      drawBarChart();
+
+      if (pagesRead % TOTAL_PAGES === 0 && pagesRead !== 0) {
+        saveKhatmaDate();
+        document.getElementById("dingSound").play();
+        alert("🎉 مبروك! أنهيت ختمة كاملة بالتاريخ الهجري!");
+      }
+    }
+
+    function addPages(n) {
+      pagesRead += n;
+      saveAndUpdate();
+    }
+
+    function saveAndUpdate() {
+      localStorage.setItem("pages", pagesRead);
+      localStorage.setItem("khatmaDates", JSON.stringify(khatmaDates));
+      updateUI();
+    }
+
+    function saveData() {
+      alert("✅ تم حفظ التقدم!");
+      localStorage.setItem("pages", pagesRead);
+      localStorage.setItem("khatmaDates", JSON.stringify(khatmaDates));
+    }
+
+    function reset() {
+      if (confirm("هل تريد إعادة ضبط جميع البيانات؟")) {
+        pagesRead = 0;
+        khatmaDates = [];
+        localStorage.removeItem("pages");
+        localStorage.removeItem("khatmaDates");
+        localStorage.removeItem("startDate");
+        updateUI();
+      }
+    }
+
+    function toggleNight() {
+      document.body.classList.toggle("night-mode");
+    }
+
+    function daysSinceStart() {
+      let startDate = localStorage.getItem("startDate");
+      if (!startDate) {
+        startDate = new Date().toISOString();
+        localStorage.setItem("startDate", startDate);
+      }
+      const diffTime = Math.abs(new Date() - new Date(startDate));
+      return Math.max(Math.floor(diffTime / (1000 * 60 * 60 * 24)), 1);
+    }
+
+    function saveKhatmaDate() {
+      const hijriDate = new Intl.DateTimeFormat('ar-SA-u-ca-islamic', {
+        day: 'numeric', month: 'numeric', year: 'numeric'
+      }).format(new Date());
+
+      const [day, month, year] = hijriDate.split("/").map(Number);
+      khatmaDates.push({ month, year });
+      localStorage.setItem("khatmaDates", JSON.stringify(khatmaDates));
+    }
+
+    function drawBarChart() {
+      const barChart = document.getElementById("barChart");
+      barChart.innerHTML = "";
+      const monthlyCounts = new Array(12).fill(0);
+
+      khatmaDates.forEach(d => {
+        if (d.month >= 1 && d.month <= 12) {
+          monthlyCounts[d.month - 1]++;
+        }
+      });
+
+      for (let i = 0; i < 12; i++) {
+        const height = monthlyCounts[i] * 15;
+        const bar = document.createElement("div");
+        bar.className = "bar";
+        bar.style.height = height + "px";
+        bar.innerText = monthlyCounts[i];
+        const container = document.createElement("div");
+        container.appendChild(bar);
+        const label = document.createElement("div");
+        label.className = "bar-label";
+        label.innerText = monthsHijri[i];
+        container.appendChild(label);
+        barChart.appendChild(container);
+      }
+    }
+
+    updateUI();
+  </script>
+</body>
+</html>
